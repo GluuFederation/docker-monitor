@@ -1,0 +1,60 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: monitor
+  name: monitor
+  namespace: gluu
+spec:
+  ports:
+  - name: monitor
+    port: 8080
+  selector:
+    app: monitor
+---
+apiVersion: v1
+data:
+  GLUU_CONFIG_ADAPTER: kubernetes
+  GLUU_CONFIG_KUBERNETES_NAMESPACE: gluu
+  GLUU_CONTAINER_METADATA: kubernetes
+  GLUU_COUCHBASE_CERT_FILE: /etc/certs/couchbase.crt
+  GLUU_COUCHBASE_PASSWORD_FILE: /etc/gluu/conf/couchbase_password
+  GLUU_COUCHBASE_URL: couchbase
+  GLUU_COUCHBASE_USER: admin
+  GLUU_LDAP_URL: opendj:1636
+  GLUU_PERSISTENCE_LDAP_MAPPING: ''
+  GLUU_PERSISTENCE_TYPE: ldap
+  GLUU_SECRET_ADAPTER: kubernetes
+  GLUU_SECRET_KUBERNETES_NAMESPACE: gluu
+kind: ConfigMap
+metadata:
+  labels:
+    app: monitor
+  name: monitor-cm
+  namespace: gluu
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: monitor
+  name: monitor
+  namespace: gluu
+spec:
+  selector:
+    matchLabels:
+      app: monitor
+  template:
+    metadata:
+      labels:
+        app: monitor
+    spec:
+      containers:
+      - envFrom:
+        - configMapRef:
+            name: monitor-cm
+        image: docker-monitor:dev
+        imagePullPolicy: Never
+        name: monitor
+        volumeMounts: []
+      volumes: []
