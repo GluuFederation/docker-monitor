@@ -13,6 +13,8 @@ import time
 from pathlib import Path
 import subprocess
 import json
+from yaspin import yaspin
+
 
 logger = logging.getLogger("gluu-kubernetes-api")
 logger.setLevel(logging.INFO)
@@ -182,11 +184,6 @@ class Monitor(object):
             CR_ROTATE_TOTAL_RUNNING_TIME=0,
             CR_ROTATE_POD_NAME=dict(),
         ),
-        NFS=dict(
-            NFS_NUMBER_OF_RUNNING_PODS=0,
-            NFS_TOTAL_RUNNING_TIME=0,
-            NFS_POD_NAME=dict(),
-        ),
     )
 
     def __init__(self):
@@ -194,9 +191,11 @@ class Monitor(object):
         self.kubernetes = Kubernetes()
         self.gluu_namespace = self.detect_gluu_namespace()
 
-        while True:
-            time.sleep(5)
-            self.analyze_app_info()
+        with yaspin(text="Printing Gluu Metrics".format(name), color="cyan") as sp:
+            self.sp = sp
+            while True:
+                time.sleep(5)
+                self.analyze_app_info()
 
     def write_variables_to_file(self):
         """Write settings out to a file
@@ -261,8 +260,6 @@ class Monitor(object):
             PERSISTENCE="app=persistence-load",
             # Daemonset
             CR_ROTATE="app=cr-rotate",
-            # Replication Controller
-            NFS="app=nfs-server",
         )
         for name, label in app_labels_haeders.items():
             # oxTrust
@@ -283,16 +280,19 @@ class Monitor(object):
             self.settings[name][name + "_TOTAL_RUNNING_TIME"] = total_time_of_all_running_pods
             self.settings[name][name + "_NUMBER_OF_RUNNING_PODS"] = number_of_running_pods
 
-            print("App: ", name)
-            print("Total time for all replicas of " + name + ": "
-                  + str(self.settings[name][name + "_TOTAL_RUNNING_TIME"]) + " secs")
-            print("Total number of running replicas of " + name + ": "
-                  + str(self.settings[name][name + "_NUMBER_OF_RUNNING_PODS"]) + " pods")
+            # task 1
+            self.sp.write("Printing App: {} metrics".format(name))
+            time.sleep(1)
+            self.sp.write("App: ", name)
+            self.sp.write("Total time for all replicas of {} : {} secs".format(name, str(self.settings[name][name + "_TOTAL_RUNNING_TIME"])))
+            self.sp.write("Total number of running replicas of {} : {} pods".format(name, str(self.settings[name][name + "_NUMBER_OF_RUNNING_PODS"])))
             for k, v in self.settings[name][name + "_POD_NAME"].items():
-                print("  - Pod name: " + k)
-                print("    * Pod Ip: " + str(self.settings[name][name + "_POD_NAME"][k]["IP"]))
-                print("    * Pod Node location: " + self.settings[name][name + "_POD_NAME"][k]["NODE"])
-            print("------------------------------------------------------------------------------------")
+                self.sp.write("  - Pod name: {}".format(k))
+                self.sp.write("    * Pod Ip: {}".format(str(self.settings[name][name + "_POD_NAME"][k]["IP"])))
+                self.sp.write("    * Pod Node location: ".format(self.settings[name][name + "_POD_NAME"][k]["NODE"]))
+            # finalize
+            self.sp.ok("✔")
+
         self.write_variables_to_file()
 
     def detect_gluu_namespace(self):
