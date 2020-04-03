@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Monitor tool for Gluu
 Author : Mohammad Abudayyeh
@@ -16,10 +17,20 @@ from pygluu.containerlib.persistence.couchbase import get_couchbase_user
 from pygluu.containerlib.persistence.couchbase import get_couchbase_password
 from pygluu.containerlib.persistence.couchbase import CouchbaseClient
 from settings import LOGGING_CONFIG
+import curses
 
 logging.config.dictConfig(LOGGING_CONFIG)
 logger = logging.getLogger("monitor")
 
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
 
 def subprocess_cmd(command):
     """Execute command"""
@@ -107,167 +118,87 @@ class Kubernetes(object):
             return False
 
 
-class BaseBackend(object):
-    def get_configuration(self):
-        raise NotImplementedError
-
-    def update_configuration(self):
-        raise NotImplementedError
-
-
-class LDAPBackend(BaseBackend):
-    def __init__(self, host, user, password):
-        ldap_server = Server(host, port=1636, use_ssl=True)
-        self.backend = Connection(ldap_server, user, password)
-
-    def get_configuration(self):
-        with self.backend as conn:
-            conn.search(
-                "ou=configuration,o=gluu",
-                '(objectclass=gluuConfiguration)',
-                attributes=['oxTrustCacheRefreshServerIpAddress',
-                            'gluuVdsCacheRefreshEnabled'],
-            )
-
-            if not conn.entries:
-                return {}
-
-            entry = conn.entries[0]
-            config = {
-                "id": entry.entry_dn,
-                "oxTrustCacheRefreshServerIpAddress": entry["oxTrustCacheRefreshServerIpAddress"][0],
-                "gluuVdsCacheRefreshEnabled": entry["gluuVdsCacheRefreshEnabled"][0],
-            }
-            return config
-
-    def update_configuration(self, id_, ip):
-        with self.backend as conn:
-            conn.modify(
-                id_,
-                {'oxTrustCacheRefreshServerIpAddress': [(MODIFY_REPLACE, [ip])]}
-            )
-            result = {
-                "success": conn.result["description"] == "success",
-                "message": conn.result["message"],
-            }
-            return result
-
-
-class CouchbaseBackend(BaseBackend):
-    def __init__(self, host, user, password):
-        self.backend = CouchbaseClient(host, user, password)
-
-    def get_configuration(self):
-        req = self.backend.exec_query(
-            "SELECT oxTrustCacheRefreshServerIpAddress, gluuVdsCacheRefreshEnabled "
-            "FROM `gluu` "
-            "USE KEYS 'configuration'"
-        )
-
-        if not req.ok:
-            return {}
-
-        config = req.json()["results"][0]
-
-        if not config:
-            return {}
-
-        config.update({"id": "configuration"})
-        return config
-
-    def update_configuration(self, id_, ip):
-        req = self.backend.exec_query(
-            "UPDATE `gluu` "
-            "USE KEYS '{0}' "
-            "SET oxTrustCacheRefreshServerIpAddress='{1}' "
-            "RETURNING oxTrustCacheRefreshServerIpAddress".format(id_, ip)
-        )
-
-        result = {
-            "success": req.ok,
-            "message": req.text,
-        }
-        return result
-
-
 class Monitor(object):
     monitor_settings = dict(
         CASA=dict(
             CASA_NUMBER_OF_RUNNING_PODS=0,
             CASA_TOTAL_RUNNING_TIME=0,
+            APP="Casa",
             CASA_POD_NAME=dict(),
         ),
         OXAUTH=dict(
             OXAUTH_NUMBER_OF_RUNNING_PODS=0,
             OXAUTH_TOTAL_RUNNING_TIME=0,
+            APP="oxAuth",
             OXAUTH_POD_NAME=dict(),
 
         ),
         OXD_SERVER=dict(
             OXD_SERVER_NUMBER_OF_RUNNING_PODS=0,
             OXD_SERVER_TOTAL_RUNNING_TIME=0,
+            APP="oxdServer",
             OXD_SERVER_POD_NAME=dict(),
 
         ),
         OXPASSPORT=dict(
             OXPASSPORT_NUMBER_OF_RUNNING_PODS=0,
             OXPASSPORT_TOTAL_RUNNING_TIME=0,
+            APP="oxPassport",
             OXPASSPORT_POD_NAME=dict(),
         ),
         RADIUS=dict(
             RADIUS_NUMBER_OF_RUNNING_PODS=0,
             RADIUS_TOTAL_RUNNING_TIME=0,
+            APP="Radius",
             RADIUS_POD_NAME=dict(),
         ),
         REDIS=dict(
             REDIS_NUMBER_OF_RUNNING_PODS=0,
             REDIS_TOTAL_RUNNING_TIME=0,
+            APP="Redis",
             REDIS_POD_NAME=dict(),
-        ),
-        EFS=dict(
-            EFS_NUMBER_OF_RUNNING_PODS=0,
-            EFS_TOTAL_RUNNING_TIME=0,
-            EFS_POD_NAME=dict(),
         ),
         KEY_ROTATION=dict(
             KEY_ROTATION_NUMBER_OF_RUNNING_PODS=0,
             KEY_ROTATION_TOTAL_RUNNING_TIME=0,
+            APP="Key Rotation",
             KEY_ROTATION_POD_NAME=dict(),
         ),
         OPENDJ=dict(
             OPENDJ_NUMBER_OF_RUNNING_PODS=0,
             OPENDJ_TOTAL_RUNNING_TIME=0,
+            APP="OpenDJ",
             OPENDJ_POD_NAME=dict(),
         ),
         OXTRUST=dict(
             OXTRUST_NUMBER_OF_RUNNING_PODS=0,
             OXTRUST_TOTAL_RUNNING_TIME=0,
+            APP="oxTrust",
             OXTRUST_POD_NAME=dict(),
         ),
         OXSHIBBOLETH=dict(
             OXSHIBBOLETH_NUMBER_OF_RUNNING_PODS=0,
             OXSHIBBOLETH_TOTAL_RUNNING_TIME=0,
+            APP="oxShibboleth",
             OXSHIBBOLETH_POD_NAME=dict(),
         ),
         CONFIG=dict(
             CONFIG_NUMBER_OF_RUNNING_PODS=0,
             CONFIG_TOTAL_RUNNING_TIME=0,
+            APP="Config-Job",
             CONFIG_POD_NAME=dict(),
         ),
         PERSISTENCE=dict(
             PERSISTENCE_NUMBER_OF_RUNNING_PODS=0,
             PERSISTENCE_TOTAL_RUNNING_TIME=0,
+            APP="Persistence-Job",
             PERSISTENCE_POD_NAME=dict(),
         ),
         CR_ROTATE=dict(
             CR_ROTATE_NUMBER_OF_RUNNING_PODS=0,
             CR_ROTATE_TOTAL_RUNNING_TIME=0,
+            APP="CacheRotate",
             CR_ROTATE_POD_NAME=dict(),
-        ),
-        NFS=dict(
-            NFS_NUMBER_OF_RUNNING_PODS=0,
-            NFS_TOTAL_RUNNING_TIME=0,
-            NFS_POD_NAME=dict(),
         ),
     )
 
@@ -275,10 +206,24 @@ class Monitor(object):
         self.settings = self.monitor_settings
         self.kubernetes = Kubernetes()
         self.gluu_namespace = self.detect_gluu_namespace()
+        self.stdscr = curses.initscr()
+        curses.noecho()
+        curses.cbreak()
+        curses.start_color()
+        curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK)
+        curses.init_pair(2, curses.COLOR_RED, curses.COLOR_BLACK)
+        curses.init_pair(3, curses.COLOR_YELLOW, curses.COLOR_BLACK)
+        curses.init_pair(4, curses.COLOR_CYAN, curses.COLOR_BLACK)
 
-        while True:
-            time.sleep(5)
-            self.analyze_app_info()
+        try:
+            while True:
+                time.sleep(5)
+                self.analyze_app_info()
+                self.report_progress()
+        finally:
+            curses.echo()
+            curses.nocbreak()
+            curses.endwin()
 
     def write_variables_to_file(self):
         """Write settings out to a file
@@ -332,7 +277,6 @@ class Monitor(object):
             OXPASSPORT="app=oxpassport",
             RADIUS="app=radius",
             REDIS="app=redis",
-            EFS="app=efs-provisioner",
             KEY_ROTATION="app=key-rotation",
             # Statefulsets
             OPENDJ="app=opendj",
@@ -343,8 +287,6 @@ class Monitor(object):
             PERSISTENCE="app=persistence-load",
             # Daemonset
             CR_ROTATE="app=cr-rotate",
-            # Replication Controller
-            NFS="app=nfs-server",
         )
         for name, label in app_labels_haeders.items():
             # oxTrust
@@ -362,19 +304,10 @@ class Monitor(object):
                     self.settings[name][name + "_POD_NAME"][pod_name] = dict()
                     self.settings[name][name + "_POD_NAME"][pod_name]["NODE"] = node_name
                     self.settings[name][name + "_POD_NAME"][pod_name]["IP"] = pod_ip
+
             self.settings[name][name + "_TOTAL_RUNNING_TIME"] = total_time_of_all_running_pods
             self.settings[name][name + "_NUMBER_OF_RUNNING_PODS"] = number_of_running_pods
 
-            print("App: ", name)
-            print("Total time for all replicas of " + name + ": "
-                  + str(self.settings[name][name + "_TOTAL_RUNNING_TIME"]) + " secs")
-            print("Total number of running replicas of " + name + ": "
-                  + str(self.settings[name][name + "_NUMBER_OF_RUNNING_PODS"]) + " pods")
-            for k, v in self.settings[name][name + "_POD_NAME"].items():
-                print("  - Pod name: " + k)
-                print("    * Pod Ip: " + str(self.settings[name][name + "_POD_NAME"][k]["IP"]))
-                print("    * Pod Node location: " + self.settings[name][name + "_POD_NAME"][k]["NODE"])
-            print("------------------------------------------------------------------------------------")
         self.write_variables_to_file()
 
     def detect_gluu_namespace(self):
@@ -387,6 +320,31 @@ class Monitor(object):
                 pod_oxtrust_name = self.kubernetes.list_pod_name_by_label(namespace.metadata.name, "app=oxtrust")
                 if pod_oxauth_name and pod_oxtrust_name:
                     return namespace.metadata.name
+
+    def report_progress(self):
+        title_cell_a = "{:<10}".format("Number")
+        title_cell_b = "{:<35}".format("App")
+        title_cell_c = "{:<15}".format("Replicas")
+        title_cell_d = "{:<18}".format("Total Running Time")
+        title_row = title_cell_a + title_cell_b + title_cell_c + title_cell_d
+        self.stdscr.scrollok(1)
+        self.stdscr.idlok(1)
+        self.stdscr.scroll(50)
+        self.stdscr.addstr(0, 0, "Gluu Metrics Summary", curses.A_BOLD)
+        self.stdscr.addstr(1, 0, title_row, curses.A_BOLD)
+        i = 0
+        for name, v in self.monitor_settings.items():
+            i += 1
+            order_number = "{:<10}".format(str(i))
+            app_name = "{:<35}".format(self.settings[name]["APP"])
+            number_of_running_pods = "{:<15}".format(str(self.settings[name][name + "_NUMBER_OF_RUNNING_PODS"]))
+            total_running_time = "{:<18}".format(str(self.settings[name][name + "_TOTAL_RUNNING_TIME"]))
+            self.stdscr.addstr(i + 1, 0, "{}".format(order_number))
+            self.stdscr.addstr("{}".format(app_name), curses.color_pair(4))
+            self.stdscr.addstr("{}".format(number_of_running_pods), curses.color_pair(1))
+            self.stdscr.addstr("{}".format(total_running_time), curses.color_pair(3))
+
+        self.stdscr.refresh()
 
 
 def main():
