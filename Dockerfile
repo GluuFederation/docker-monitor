@@ -53,7 +53,9 @@ ENV GLUU_CONFIG_ADAPTER=consul \
     GLUU_CONFIG_CONSUL_TOKEN_FILE=/etc/certs/consul_token \
     GLUU_CONFIG_KUBERNETES_NAMESPACE=default \
     GLUU_CONFIG_KUBERNETES_CONFIGMAP=gluu \
-    GLUU_CONFIG_KUBERNETES_USE_KUBE_CONFIG=false
+    GLUU_CONFIG_KUBERNETES_USE_KUBE_CONFIG=false \
+    TERM=linux \
+    TERMINFO=/etc/terminfo
 
 # ==========
 # Secret ENV
