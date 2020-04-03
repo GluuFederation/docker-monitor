@@ -144,11 +144,6 @@ class Monitor(object):
             REDIS_TOTAL_RUNNING_TIME=0,
             REDIS_POD_NAME=dict(),
         ),
-        EFS=dict(
-            EFS_NUMBER_OF_RUNNING_PODS=0,
-            EFS_TOTAL_RUNNING_TIME=0,
-            EFS_POD_NAME=dict(),
-        ),
         KEY_ROTATION=dict(
             KEY_ROTATION_NUMBER_OF_RUNNING_PODS=0,
             KEY_ROTATION_TOTAL_RUNNING_TIME=0,
@@ -249,7 +244,6 @@ class Monitor(object):
             OXPASSPORT="app=oxpassport",
             RADIUS="app=radius",
             REDIS="app=redis",
-            EFS="app=efs-provisioner",
             KEY_ROTATION="app=key-rotation",
             # Statefulsets
             OPENDJ="app=opendj",

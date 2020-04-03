@@ -53,7 +53,7 @@ spec:
       - envFrom:
         - configMapRef:
             name: monitor-cm
-        image: docker-monitor:dev
+        image: gluufederation/monitor:4.1.1_dev
         imagePullPolicy: Never
         name: monitor
         volumeMounts: []
